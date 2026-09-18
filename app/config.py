@@ -5,25 +5,28 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
 
     # VoxShield model
-    VOXSHIELD_MODEL_DIR: str = "./models/voxshield"
+    voxshield_model_dir: str = "./models/voxshield"
 
     # Audio configuration
-    MAX_AUDIO_DURATION: float = 30.0
-    MAX_FILE_SIZE_MB: float = 25.0
+    max_audio_duration: float = 30.0
+    max_file_size_mb: float = 25.0
 
     # Sliding window configuration
-    WINDOW_SIZE: float = 3.0
-    WINDOW_OVERLAP: float = 0.5
+    window_size: float = 3.0
+    window_overlap: float = 0.5
 
     # Detection thresholds
-    STRONG_FAKE_THRESHOLD: float = 0.70
-    MODERATE_FAKE_THRESHOLD: float = 0.40
+    strong_fake_threshold: float = 0.70
+    moderate_fake_threshold: float = 0.40
 
     # Frontend
-    FRONTEND_URL: str = "http://localhost:3000"
+    frontend_url: str = "http://localhost:3000"
 
     # Logging
-    LOG_LEVEL: str = "INFO"
+    log_level: str = "INFO"
+
+    # Supported audio formats
+    supported_formats: list[str] = ["wav", "mp3", "flac", "ogg", "m4a"]
 
     model_config = SettingsConfigDict(
         env_file=".env",

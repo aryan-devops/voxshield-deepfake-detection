@@ -10,36 +10,34 @@ from app.config import settings
 
 
 class ModelService:
+    _model = None
+    _processor = None
+    _device = None
+    _loaded = False
 
-    def __init__(self):
-        self.model = None
-        self.processor = None
-        self.device = self._detect_device()
-        self.loaded = False
-
-    def _detect_device(self):
-
+    @classmethod
+    def _detect_device(cls):
+        import sys
         if torch.cuda.is_available():
             return torch.device("cuda")
-
-        if (
-            hasattr(torch.backends, "mps")
-            and torch.backends.mps.is_available()
-        ):
+        
+        # Only attempt MPS on Darwin (Mac) to avoid Linux issues
+        if sys.platform == "darwin" and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             return torch.device("mps")
-
+            
         return torch.device("cpu")
 
-    def load(self):
-
-        model_dir = settings.VOXSHIELD_MODEL_DIR
+    @classmethod
+    def initialize(cls):
+        cls._device = cls._detect_device()
+        model_dir = settings.voxshield_model_dir
 
         print()
         print("=" * 60)
         print("Loading VoxShield")
         print("=" * 60)
         print("Model directory:", model_dir)
-        print("Device:", self.device)
+        print("Device:", cls._device)
 
         if not os.path.exists(model_dir):
             raise FileNotFoundError(
@@ -47,66 +45,67 @@ class ModelService:
             )
 
         print("Loading feature extractor...")
-
-        self.processor = AutoFeatureExtractor.from_pretrained(
+        cls._processor = AutoFeatureExtractor.from_pretrained(
             model_dir,
             local_files_only=True,
         )
 
         print("Loading model...")
-
-        self.model = AutoModelForAudioClassification.from_pretrained(
+        cls._model = AutoModelForAudioClassification.from_pretrained(
             model_dir,
             local_files_only=True,
         )
 
-        self.model.to(self.device)
-        self.model.eval()
+        cls._model.to(cls._device)
+        cls._model.eval()
 
-        self.loaded = True
+        cls._loaded = True
 
         print()
         print("✅ VoxShield model loaded successfully")
-        print("Labels:", self.model.config.id2label)
+        print("Labels:", cls._model.config.id2label)
         print("=" * 60)
 
-    def is_loaded(self):
-        return self.loaded
+    @classmethod
+    def get_status(cls):
+        labels = cls._model.config.id2label if cls._model else {}
+        return {
+            "loaded": cls._loaded,
+            "device": str(cls._device) if cls._device else "cpu",
+            "model_name": "VoxShield",
+            "processor": "AutoFeatureExtractor",
+            "labels": labels
+        }
 
-    def predict(self, audio, sampling_rate):
+    @classmethod
+    def get_sampling_rate(cls):
+        if cls._processor and hasattr(cls._processor, "sampling_rate"):
+            return cls._processor.sampling_rate
+        return 16000
 
-        if not self.loaded:
-            raise RuntimeError(
-                "VoxShield model has not been loaded"
-            )
+    @classmethod
+    def run_inference(cls, audio_samples):
+        if not cls._loaded:
+            raise RuntimeError("VoxShield model has not been loaded")
 
-        inputs = self.processor(
-            audio,
-            sampling_rate=sampling_rate,
+        sr = cls.get_sampling_rate()
+        inputs = cls._processor(
+            audio_samples,
+            sampling_rate=sr,
             return_tensors="pt",
         )
 
         inputs = {
-            key: value.to(self.device)
+            key: value.to(cls._device)
             for key, value in inputs.items()
         }
 
         with torch.no_grad():
+            outputs = cls._model(**inputs)
+            probabilities = torch.softmax(outputs.logits, dim=-1)[0]
 
-            outputs = self.model(**inputs)
-
-            probabilities = torch.softmax(
-                outputs.logits,
-                dim=-1
-            )[0]
-
-        real_probability = float(
-            probabilities[0].item()
-        )
-
-        fake_probability = float(
-            probabilities[1].item()
-        )
+        real_probability = float(probabilities[0].item())
+        fake_probability = float(probabilities[1].item())
 
         prediction = (
             "fake"
@@ -114,15 +113,4 @@ class ModelService:
             else "real"
         )
 
-        return {
-            "real_probability": real_probability,
-            "fake_probability": fake_probability,
-            "prediction": prediction,
-        }
-
-
-# ============================================================
-# GLOBAL VOXSHIELD MODEL SERVICE
-# ============================================================
-
-model_service = ModelService()
+        return real_probability, fake_probability, prediction

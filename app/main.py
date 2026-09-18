@@ -28,7 +28,11 @@ def health():
     }
 # Setup logging
 logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+    level=getattr(
+        logging,
+        getattr(settings, "log_level", "INFO").upper(),
+        logging.INFO,
+    ),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("voxshield")

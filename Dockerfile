@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Install system dependencies (required for soundfile/librosa)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libsndfile1 \
+    libsndfile1 ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies
